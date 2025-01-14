@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      DB_MASTER_HOST: db-master
+      DB_SLAVE_HOST: db-slave
+      DB_USER: postgres
+      DB_PASSWORD: password
+      DB_NAME: orders_db
+      DB_PORT: 5432
+    depends_on:
+      db-master:
+        condition: service_healthy
+      db-slave:
+        condition: service_healthy
+    networks:
+      - db-network
+
+  db-master:
+    image: postgres:15
+    container_name: db-master
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orders_db
+    volumes:
+      - db-master-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - db-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: >
+      bash -c "
+      echo 'Starting master database...';
+      docker-entrypoint.sh postgres &
+      sleep 5;
+      echo 'Creating replicator user...';
+      su - postgres -c \"psql -U postgres -c \\\"CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD 'password';\\\"\" || true;
+      echo 'Updating pg_hba.conf...';
+      sed -i '/host all all all scram-sha-256/i host replication replicator 0.0.0.0/0 md5' /var/lib/postgresql/data/pg_hba.conf;
+      su - postgres -c \"/usr/lib/postgresql/15/bin/pg_ctl reload -D /var/lib/postgresql/data\";
+      echo 'Configuring postgresql.conf...';
+      echo 'wal_level = replica' >> /var/lib/postgresql/data/postgresql.conf;
+      echo 'max_wal_senders = 10' >> /var/lib/postgresql/data/postgresql.conf;
+      echo 'wal_keep_size = 32' >> /var/lib/postgresql/data/postgresql.conf;
+      echo 'hot_standby = on' >> /var/lib/postgresql/data/postgresql.conf;
+      su - postgres -c \"/usr/lib/postgresql/15/bin/pg_ctl reload -D /var/lib/postgresql/data\";
+      echo 'Master database is ready for replication.';
+      wait
+      "
+
+  db-slave:
+    image: postgres:15
+    container_name: db-slave
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: orders_db
+    volumes:
+      - db-slave-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - db-network
+    depends_on:
+      db-master:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    command: >
+      bash -c "
+      echo 'Waiting for master database to start...';
+      while ! pg_isready -h db-master -p 5432; do sleep 1; done;
+      echo 'Setting up replication...';
+      rm -rf /var/lib/postgresql/data/*;
+      PGPASSWORD=password pg_basebackup -h db-master -p 5432 -U replicator -D /var/lib/postgresql/data -Fp -Xs -P;
+      touch /var/lib/postgresql/data/standby.signal;
+      echo \"primary_conninfo = 'host=db-master port=5432 user=replicator password=password'\" >> /var/lib/postgresql/data/postgresql.auto.conf;
+      echo 'Replication setup complete. Starting slave database...';
+      docker-entrypoint.sh postgres
+      "
+
+volumes:
+  db-master-data:
+  db-slave-data:
+
+networks:
+  db-network:
+    driver: bridge

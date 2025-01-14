@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+  labels:
+    app: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - name: app
+        image: danialcoding007/order-tracker:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DB_MASTER_HOST
+          value: db-master-service
+        - name: DB_SLAVE_HOST
+          value: db-slave-service
+        - name: DB_USER
+          value: postgres
+        - name: DB_PASSWORD
+          value: password
+        - name: DB_NAME
+          value: orders_db
+        - name: DB_PORT
+          value: "5432"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 30

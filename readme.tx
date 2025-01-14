@@ -1,0 +1,130 @@
+## p1
+
+docker-compose build
+docker-compose up
+
+
+## if table doesnt existr
+docker exec -it <container_id_of_db-master> bash
+
+psql -U postgres
+
+CREATE DATABASE orders_db;
+
+
+## p2
+docker exec -it <master_container_id> psql -U postgres -d orders_db
+
+CREATE TABLE orders (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    product_id INT NOT NULL,
+    quantity INT NOT NULL,
+    address TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL
+);
+
+
+######config master
+##p3
+
+docker exec -it <container_id_of_db-master> bash
+
+apt-get update && apt-get install -y nano
+
+
+#add or config
+nano /var/lib/postgresql/data/postgresql.conf
+
+wal_level = replica
+max_wal_senders = 5
+wal_keep_size = 64
+
+
+#add or config
+nano /var/lib/postgresql/data/pg_hba.conf
+
+host replication postgres 0.0.0.0/0 trust
+
+
+##p4
+psql -U postgres
+
+CREATE ROLE replicator WITH REPLICATION PASSWORD 'replica_password' LOGIN;
+
+
+docker restart <container_id_of_db-master>
+
+
+##### config slave
+docker exec -it db-slave bash
+
+
+
+########################
+sudo docker tag 5788ce25344c  danialcoding007/order-tracker:latest
+
+sudo docker push danialcoding007/order-tracker:latest
+
+
+###########
+kubectl create secret generic app-env-secret --from-env-file=.env
+
+kubectl get secrets
+
+
+DB_MASTER_HOST=db-master-service.my-namespace.svc.cluster.local
+DB_SLAVE_HOST=db-slave-service.my-namespace.svc.cluster.local
+
+
+############################
+kubectl apply -f deployment-master.yaml
+
+
+
+kubectl exec -it <pod-name> -- bash
+
+nc -zv db-master-service 5432
+
+
+nc -zv db-slave-service 5432
+
+
+kubectl exec -it app-deployment-78d56b6767-wq8hb -- sh
+
+echo $DB_MASTER_HOST
+echo $DB_SLAVE_HOST
+
+nc -zv $DB_MASTER_HOST 5432
+
+nc -zv $DB_SLAVE_HOST 5432
+
+
+
+
+
+
+
+
+###################### test
+kubectl get nodes -o wide
+
+
+curl -X POST http://192.168.39.236:32000/orders \
+-H "Content-Type: application/json" \
+-d '{
+  "userId": 1,
+  "productId": 101,
+  "quantity": 2,
+  "address": "123 Test St"
+}'
+
+
+curl -X PUT http://192.168.39.236:<port>/orders/1 \
+-H "Content-Type: application/json" \
+-d '{
+  "status": "Approved"
+}'
+
+
+curl http://192.168.39.236:32000/orders/1/status
