@@ -20,6 +20,9 @@ const slavePool = new Pool({
 // ایجاد جدول orders در صورت عدم وجود (برای هر دو پایگاه داده)
 const createOrdersTable = async () => {
   try {
+
+    await new Promise(resolve => setTimeout(resolve, 10000));
+
     // ایجاد جدول در db-master
     await masterPool.query(`
       CREATE TABLE IF NOT EXISTS orders (
@@ -31,10 +34,11 @@ const createOrdersTable = async () => {
         status VARCHAR(50) NOT NULL
       );
     `);
+
     console.log('Table "orders" created or already exists in db-master.');
 
-    // اضافه کردن تاخیر برای اطمینان از راه‌اندازی db-slave
-    await new Promise(resolve => setTimeout(resolve, 10000)); // 10 ثانیه تاخیر
+    // // اضافه کردن تاخیر برای اطمینان از راه‌اندازی db-slave
+    // await new Promise(resolve => setTimeout(resolve, 10000)); // 10 ثانیه تاخیر
 
     // ایجاد جدول در db-slave
     // await slavePool.query(`

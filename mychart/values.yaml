@@ -1,0 +1,21 @@
+replicaCount: 1
+
+image:
+  repository: danialcoding007/order-tracker
+  tag: latest
+  pullPolicy: Always
+  # pullPolicy: IfNotPresent
+
+service:
+  type: NodePort
+  appPort: 3000
+
+db:
+  masterHost: db-master-service
+  slaveHost: db-slave-service
+  user: postgres
+  password: password
+  name: orders_db
+  port: 5432
+
+resources: {}

@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: db-master-deployment
+  labels:
+    app: db-master
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: db-master
+  template:
+    metadata:
+      labels:
+        app: db-master
+    spec:
+      containers:
+      - name: db-master
+        image: postgres:15
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: {{ .Values.db.user }}
+        - name: POSTGRES_PASSWORD
+          value: {{ .Values.db.password }}
+        - name: POSTGRES_DB
+          value: {{ .Values.db.name }}
+        volumeMounts:
+        - name: db-master-data
+          mountPath: /var/lib/postgresql/data
+        command:
+        - "bash"
+        - "-c"
+        - |
+          echo 'Starting master database...';
+          docker-entrypoint.sh postgres &
+          sleep 5;
+          echo 'Creating replicator user...';
+          su - postgres -c "psql -U postgres -c \"CREATE USER replicator WITH REPLICATION ENCRYPTED PASSWORD 'password';\"" || true;
+          echo 'Updating pg_hba.conf...';
+          sed -i '/host all all all scram-sha-256/i host replication replicator 0.0.0.0/0 md5' /var/lib/postgresql/data/pg_hba.conf;
+          su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl reload -D /var/lib/postgresql/data";
+          echo 'Configuring postgresql.conf...';
+          echo 'wal_level = replica' >> /var/lib/postgresql/data/postgresql.conf;
+          echo 'max_wal_senders = 10' >> /var/lib/postgresql/data/postgresql.conf;
+          echo 'wal_keep_size = 32' >> /var/lib/postgresql/data/postgresql.conf;
+          echo 'hot_standby = on' >> /var/lib/postgresql/data/postgresql.conf;
+          su - postgres -c "/usr/lib/postgresql/15/bin/pg_ctl reload -D /var/lib/postgresql/data";
+          echo 'Master database is ready for replication.';
+          wait
+      volumes:
+      - name: db-master-data
+        emptyDir: {}

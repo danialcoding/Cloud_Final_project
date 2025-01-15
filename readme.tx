@@ -62,9 +62,20 @@ docker exec -it db-slave bash
 
 
 ########################
-sudo docker tag 5788ce25344c  danialcoding007/order-tracker:latest
+sudo docker build -t danialcoding007/order-tracker:latest .
+
+sudo docker images
+
+sudo docker tag 5788ce25344c danialcoding007/order-tracker:latest
 
 sudo docker push danialcoding007/order-tracker:latest
+
+helm upgrade --install ordertracker ./mychart
+
+helm uninstall ordertracker
+
+helm install ordertracker ./mychart
+
 
 
 ###########
@@ -108,9 +119,9 @@ nc -zv $DB_SLAVE_HOST 5432
 
 ###################### test
 kubectl get nodes -o wide
+kubectl get services
 
-
-curl -X POST http://192.168.39.236:32000/orders \
+curl -X POST http://192.168.39.236:30957/orders \
 -H "Content-Type: application/json" \
 -d '{
   "userId": 1,
@@ -120,11 +131,17 @@ curl -X POST http://192.168.39.236:32000/orders \
 }'
 
 
-curl -X PUT http://192.168.39.236:<port>/orders/1 \
+curl -X PUT http://192.168.39.236:30957/orders/1 \
 -H "Content-Type: application/json" \
 -d '{
   "status": "Approved"
 }'
 
 
-curl http://192.168.39.236:32000/orders/1/status
+curl http://192.168.39.236:30957/orders/1/status
+
+
+
+########################### RUN Amirsalar
+
+helm install ordertracker ./mychart

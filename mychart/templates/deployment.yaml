@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-deployment
+  labels:
+    app: app
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - name: app
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: {{ .Values.service.appPort }}
+        env:
+        - name: DB_MASTER_HOST
+          value: {{ .Values.db.masterHost }}
+        - name: DB_SLAVE_HOST
+          value: {{ .Values.db.slaveHost }}
+        - name: DB_USER
+          value: {{ .Values.db.user }}
+        - name: DB_PASSWORD
+          value: {{ .Values.db.password }}
+        - name: DB_NAME
+          value: {{ .Values.db.name }}
+        - name: DB_PORT
+          value: "{{ .Values.db.port }}"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.service.appPort }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: {{ .Values.service.appPort }}
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /health
+            port: {{ .Values.service.appPort }}
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 30
